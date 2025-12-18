@@ -15021,7 +15021,7 @@ def summarize_result(check_0401: pd.DataFrame, check_0801: pd.DataFrame) -> dict
 # UI
 # -----------------------------
 st.set_page_config(page_title="수술방재료약제누락확인용(남양주백병원)", layout="wide")
-st.title("수술방재료약제누락확인용(남양주백병원) \n→ 처방 복붙만으로 0401/0801 점검 (각 파일 case_n 최대값 규칙만)")
+st.title("수술방재료약제누락확인용(남양주백병원) \n→ 처방 복붙만으로 0401/0801 점검 (case_n이 이전의 케이스 갯수임. 1이라면 케이스가 1개뿐이였음)")
 
 with st.sidebar:
     st.subheader("점검 옵션")
