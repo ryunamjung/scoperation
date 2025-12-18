@@ -15020,7 +15020,7 @@ def summarize_result(check_0401: pd.DataFrame, check_0801: pd.DataFrame) -> dict
 # -----------------------------
 # UI
 # -----------------------------
-st.set_page_config(page_title="규칙 누락 점검(하드코딩)", layout="wide")
+st.set_page_config(page_title="수술방재료약제누락확인용(남양주백병원)", layout="wide")
 st.title("규칙결과 하드코딩 → 처방 복붙만으로 0401/0801 점검 (각 파일 case_n 최대값 규칙만)")
 
 with st.sidebar:
