@@ -255,27 +255,41 @@ applied_codes_all = sorted({c for s in applied_by_date.values() for c in s})
 with st.expander("기준코드 목록 (이번 복붙에서 적용된 기준코드 색표시)", expanded=True):
     rows = []
     for base_code, rule in sorted(RULES.items(), key=lambda x: x[0]):
-        rows.append(
-            {
-                "기준코드": base_code,
-                "base_col": rule.get("base_col", ""),
-                "case_n_max": rule.get("case_n_max", ""),
-                "0401규칙수": len(rule.get("rules_0401", [])),
-                "0801규칙수": len(rule.get("rules_0801", [])),
-                "이번복붙_적용여부": (base_code in applied_codes_all),
-            }
-        )
-    df_list = (
-        pd.DataFrame(rows)
-        .sort_values(["이번복붙_적용여부", "기준코드"], ascending=[False, True])
-        .reset_index(drop=True)
-    )
+        rows.append({
+            "기준코드": base_code,
+            "base_col": rule.get("base_col", ""),
+            "case_n_max": rule.get("case_n_max", ""),
+            "0401규칙수": len(rule.get("rules_0401", []) or []),
+            "0801규칙수": len(rule.get("rules_0801", []) or []),
+            "이번복붙_적용여부": (base_code in applied_codes_all),
+        })
+
+    # ✅ rows가 비거나, 컬럼이 이상하게 생성돼도 절대 KeyError 안 나게 처리
+    if not rows:
+        st.error("RULES가 비어있습니다. (하드코딩 RULES가 파일에 정상 포함되어 있는지 확인하세요)")
+        st.stop()
+
+    df_list = pd.DataFrame(rows)
+
+    # 컬럼 누락 방어(예: rows 안에 dict가 아닌 값이 섞였을 때)
+    for col, default in [("기준코드", ""), ("이번복붙_적용여부", False)]:
+        if col not in df_list.columns:
+            df_list[col] = default
+
+    # sort는 컬럼 존재할 때만
+    sort_cols = [c for c in ["이번복붙_적용여부", "기준코드"] if c in df_list.columns]
+    if sort_cols:
+        ascending = [False, True][:len(sort_cols)]
+        df_list = df_list.sort_values(sort_cols, ascending=ascending).reset_index(drop=True)
+    else:
+        df_list = df_list.reset_index(drop=True)
 
     def _hl(row):
         return ["background-color:#d1fae5"] * len(row) if bool(row.get("이번복붙_적용여부")) else [""] * len(row)
 
     st.dataframe(df_list.style.apply(_hl, axis=1), use_container_width=True)
     st.caption("이번 복붙에서 적용된 기준코드: " + (", ".join(applied_codes_all) if applied_codes_all else "(없음)"))
+
 
 if not applied_by_date:
     st.warning("이번 복붙에서는 어떤 기준코드도(항목=0801 기준) 발견되지 않아 규칙을 적용하지 않았습니다.")
