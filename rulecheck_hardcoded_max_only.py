@@ -3,17 +3,19 @@ from __future__ import annotations
 import io
 import re
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set
 
 import pandas as pd
 import streamlit as st
 
+
 # ============================================================
-# ✅ RULES: 엑셀(규칙결과_*.xlsx)에서 추출해 "하드코딩"된 데이터
-#    - 각 파일별 case_n 최댓값과 동일한 행만 포함
-#    - case_n > 1 조건 적용
+# ✅ 하드코딩 RULES (각 파일의 case_n 최대값과 동일한 행만)
 # ============================================================
-RULES: Dict[str, dict] = {'MZ001': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_MZ001_20251217_162619.xlsx', 'max_case_n': 9, 'rows': [{'항목': '401', '코드': '644902691', '청구코드': '644902691', '처방코드': '64490269', '코드명': '[331]중외생리식염주사액(20ml)', '단가': '321', '급비': '0', 'case_n': 9, '동반(모든케이스)': True}, {'항목': '401', '코드': '657804451', '청구코드': '657804451', '처방코드': '65780445', '코드명': '[121]로카핀주7.5mg/ml(로피바카인염산염수화물)_(0.158g/20ml)', '단가': '0', '급비': '0', 'case_n': 9, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCN', '코드명': '인성부직반창고 나잘', '단가': '30,000', '급비': '3', 'case_n': 9, '동반(모든케이스)': True}, {'항목': '801', '코드': 'MZ001', '청구코드': 'MZ001', '처방코드': 'MZ001A', '코드명': 'FIMS-(V)', '단가': '600,000', '급비': '3', 'case_n': 9, '동반(모든케이스)': True}]}, 'N0471': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_N0471_20251217_162438.xlsx', 'max_case_n': 5, 'rows': [{'항목': '401', '코드': '644902691', '청구코드': '644902691', '처방코드': '64490269', '코드명': '[331]중외생리식염주사액(20ml)', '단가': '321', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '(654802PE)', '청구코드': '(654802PE)', '처방코드': '654802PE', '코드명': '액상하이랙스주 750 I.U/0.5ml (PEN-무수가)', '단가': '0', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '(6706034A)', '청구코드': '(6706034A)', '처방코드': '6706034A', '코드명': '[121]휴온스리도카인1 %20ml(PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '059600681', '청구코드': '059600681', '처방코드': '059600681', '코드명': '[245]리포타손 주 4mg/1ml(5)', '단가': '50,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '642200701', '청구코드': '642200701', '처방코드': 'BMIDAA', '코드명': '[향]*부광미다졸람 5mg/5ml (PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '643700271', '청구코드': '643700271', '처방코드': '64370027', '코드명': '[618]국제세파제돈주1g(세파제돈나트륨)', '단가': '5,778', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '648903331', '청구코드': '648903331', '처방코드': '6489033SC', '코드명': '(척추진정)프리세덱스프리믹스주 20ml', '단가': '100,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802271', '청구코드': '657802271', '처방코드': '65780229', '코드명': '[마]*하나구연산펜타닐 0.157mg/2ml (PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '657804451', '청구코드': '657804451', '처방코드': '65780445N', '코드명': '[121]PEN용 로카핀주7.5mg/ml_(0.158g/20ml)', '단가': '0', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': '657804561', '청구코드': '657804561', '처방코드': 'A0456B', '코드명': '[111][향]아네폴주사(프로포폴)_(50mg/5mL)(PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': 'IX', '청구코드': 'IX', '처방코드': 'IX', '코드명': '수기료 산정안함', '단가': '0', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK053', '청구코드': 'KK053', '처방코드': 'KK053', '코드명': 'Fluid-501-1000mL', '단가': '3,920', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK054', '청구코드': 'KK054', '처방코드': 'KK054', '코드명': 'IV side', '단가': '1,440', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': '699900020', '청구코드': '699900020', '처방코드': 'OXY02', '코드명': '처치용산소 2L', '단가': '11', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BC1229RG', '청구코드': 'BC1229RG', '처방코드': 'BC1229RG', '코드명': 'LSO보조기(요추)', '단가': '150,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BJ4801UN', '청구코드': 'BJ4801UN', '처방코드': 'BJ4801UN', '코드명': 'spinaut catheter(요추) L-PEN', '단가': '1,000,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BK7000VB', '청구코드': 'BK7000VB', '처방코드': 'BK7000VB', '코드명': 'BBAND (아이비메디칼)', '단가': '30,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCN', '코드명': '인성부직반창고 나잘', '단가': '30,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'E5100070', '청구코드': 'E5100070', '처방코드': 'E5100051', '코드명': 'Spinofill (아이비메디칼)', '단가': '88,650', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'F1401004', '청구코드': 'F1401004', '처방코드': 'F1401004', '코드명': 'VP needle (아이비메디칼)', '단가': '57,430', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M0040', '청구코드': 'M0040', '처방코드': 'M0040', '코드명': 'O2 Inhalation(산소흡입)-1일당', '단가': '8,720', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M3101127', '청구코드': 'M3101127', '처방코드': 'M3101027', '코드명': '큐앤큐메딕스밴드 부직포+탈지면패드 6*8 [1호]', '단가': '143', '급비': 'B', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N0471', '청구코드': 'N0471', '처방코드': 'N0471', '코드명': 'Vertebroplasty(VP)-1부위(경피적 척추 성형술-1부위)', '단가': '272,740', '급비': '0', 'case_n': 5, '동반(모든케이스)': True}, {'항목': '801', '코드': 'SZ634', '청구코드': 'SZ634', '처방코드': 'SZ634A', '코드명': 'PEN -Lumbar(경피적 경막외강 신경성형술)', '단가': '1,100,000', '급비': '3', 'case_n': 5, '동반(모든케이스)': True}]}, 'N1494': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_N1494_20251217_162811.xlsx', 'max_case_n': 2, 'rows': [{'항목': '401', '코드': '650500341', '청구코드': '650500341', '처방코드': '65050034', '코드명': '[121]제일리도카인2%주(0.4g/20ml)', '단가': '620', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '640001071', '청구코드': '640001071', '처방코드': '64000107', '코드명': '[331]이노엔0.9%생리식염주사액(100ml)', '단가': '1,304', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '(PINJ05)', '청구코드': '(PINJ05)', '처방코드': 'PINJ05', '코드명': '통증주사', '단가': '50,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '640001711', '청구코드': '640001711', '처방코드': '64000171', '코드명': '[339]이노엔생리식염관주액(3000ml)', '단가': '4,962', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '640002610', '청구코드': '640002610', '처방코드': '64000261', '코드명': '[331]플라스마솔루션에이주(1000ml)', '단가': '4,815', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '640002680', '청구코드': '640002680', '처방코드': '64000268', '코드명': '[331]이노엔하트만액 1000ml', '단가': '1,675', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '641906121', '청구코드': '641906121', '처방코드': 'BNSR', '코드명': '[235]나제론주사액0.3mg(0.3mg/2ml)', '단가': '18,475', '급비': '1', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '641907861', '청구코드': '641907861', '처방코드': '64190786', '코드명': '브레스온주 2ml (보령제약)', '단가': '120,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '645100643', '청구코드': '645100643', '처방코드': 'AQU1', '코드명': '[713]대한멸균증류수20ml(앰플,PP)-대한약품*', '단가': '211', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '648502361', '청구코드': '648502361', '처방코드': '64850236', '코드명': '[332]*트라넥삼산주사500mg-신풍제약(주)', '단가': '480', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '649800971', '청구코드': '649800971', '처방코드': 'BMBN', '코드명': '[123]명문모비눌주0.2mg/1ml(글리코피롤레이트)', '단가': '700', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '649804381', '청구코드': '649804381', '처방코드': '64980438', '코드명': '[235]*오트론주(온단세트론염산염수화물)(수출명:명문온단세트론주사)_(5mg/2ml) 급여명문제약(주)', '단가': '4,626', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '650500421', '청구코드': '650500421', '처방코드': 'A00421', '코드명': '[245]*제일에피네프린주사액', '단가': '338', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '652100211', '청구코드': '652100211', '처방코드': 'BLSX', '코드명': '[213]*라식스주사 20mg (한독)', '단가': '349', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '653100701', '청구코드': '653100701', '처방코드': '65310070F', '코드명': '[611](OR용-FREE)비씨반코마이신염산염주1g', '단가': '0', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '653101191', '청구코드': '653101191', '처방코드': '653101191', '코드명': '[222]아록솔주(암브록솔염산염)_(15mg/2mL)', '단가': '300', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '653402351', '청구코드': '653402351', '처방코드': 'A0235', '코드명': '[111][향]포폴주사12ml(프로포폴)', '단가': '1,812', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '654802110', '청구코드': '654802110', '처방코드': '65480211', '코드명': '액상하이랙스주 750 I.U/0.5ml', '단가': '40,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '655402961', '청구코드': '655402961', '처방코드': '65540296', '코드명': '[122]로큐메론주50mg/5ml(로쿠로니움브롬화물)', '단가': '3,174', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802273', '청구코드': '657802273', '처방코드': '65780227', '코드명': '[821][마]하나구연산펜타닐주0.157mg/2ml', '단가': '2,071', '급비': '1', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802283', '청구코드': '657802283', '처방코드': '65780228', '코드명': '[821][마]하나구연산펜타닐주사(10ml/앰플(P)', '단가': '9,954', '급비': '1', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '657804451', '청구코드': '657804451', '처방코드': '65780445', '코드명': '[121]로카핀주7.5mg/ml(로피바카인염산염수화물)_(0.158g/20ml)', '단가': '5,338', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '662800061', '청구코드': '662800061', '처방코드': 'NDNAPL', '코드명': '신경손상DNA-플라센텍스주', '단가': '120,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '670602631', '청구코드': '670602631', '처방코드': '67060263', '코드명': '하이코민주사 2ml(fee free-하부코드전용)', '단가': '0', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '670603464', '청구코드': '670603464', '처방코드': '67060346', '코드명': '[121]휴온스리도카인1%주(0.2134g/20ml)', '단가': '641', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': '681100401', '청구코드': '681100401', '처방코드': '6932AAP', '코드명': '(fee free-하부코드전용)GCW아세트아미노펜주', '단가': '0', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': 'IX', '청구코드': 'IX', '처방코드': 'IX', '코드명': '수기료 산정안함', '단가': '0', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK052', '청구코드': 'KK052', '처방코드': 'KK052', '코드명': 'Fluid-100-500mL', '단가': '3,220', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK053', '청구코드': 'KK053', '처방코드': 'KK053', '코드명': 'Fluid-501-1000mL', '단가': '3,920', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK054', '청구코드': 'KK054', '처방코드': 'KK054', '코드명': 'IV side', '단가': '1,440', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BJ4802UN', '청구코드': 'BJ4802UN', '처방코드': 'BJ4802UN', '코드명': 'Spinaut-V Epidural Catheter(아이비메디칼)', '단가': '2,000,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BK7000VB', '청구코드': 'BK7000VB', '처방코드': 'BK7000VB', '코드명': 'BBAND (아이비메디칼)', '단가': '30,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BK7000ZC', '청구코드': 'BK7000ZC', '처방코드': 'BK7000ZC', '코드명': 'MEDIAS T (아이비메디칼)', '단가': '12,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM2000JI', '청구코드': 'BM2000JI', '처방코드': 'BM2000JI', '코드명': 'Tape silicone(innomed) 2.5*30cm (비즈메디)', '단가': '4,950', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCM', '코드명': '인성부직반창고 마스크', '단가': '30,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100JN', '청구코드': 'BM5100JN', '처방코드': 'BM5101JN', '코드명': 'VS 밴드 (아이비메디칼)', '단가': '30,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'J4306735', '청구코드': 'J4306735', '처방코드': 'J4306735', '코드명': 'Autofuser K Bolus (PCA )(아이비메디칼)', '단가': '54,150', '급비': 'B', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K3002304', '청구코드': 'K3002304', '처방코드': 'K3002304', '코드명': 'Barovac-Pp (세운)', '단가': '17,160', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K3100105', '청구코드': 'K3100105', '처방코드': 'K3100005', '코드명': 'Urine Bag (비즈메디)', '단가': '1,290', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4041031', '청구코드': 'K4041031', '처방코드': 'K4041031', '코드명': 'E-Tube Reinforced Cuffed Type(꺽임방지형)(전규격)(비즈메디)', '단가': '14,820', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4430035', '청구코드': 'K4430035', '처방코드': 'K4430035', '코드명': 'ACE BLADE(비전메디)', '단가': '15,750', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4501361', '청구코드': 'K4501361', '처방코드': 'K4501361', '코드명': 'HEATED CIRCUIT', '단가': '57,070', '급비': 'B', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K5001504', '청구코드': 'K5001504', '처방코드': 'K5001003', '코드명': 'Foley Cath(14fr/16Fr/18 Fr)(비즈메디)', '단가': '3,790', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K9205250', '청구코드': 'K9205250', '처방코드': 'K9205250', '코드명': 'M-Clot [전규격]', '단가': '100,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'L9002003', '청구코드': 'L9002003', '처방코드': 'L9002003', '코드명': 'Bis Xp Platform Polyester 등 (전신마취시)(큐메딕스)', '단가': '43,730', '급비': 'B', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M0060', '청구코드': 'M0060', '처방코드': 'M0060', '코드명': 'Foley Catheterization', '단가': '12,380', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M6610161', '청구코드': 'M6610161', '처방코드': 'M6610161', '코드명': 'ACE GRIP ENDO FIXⅡ', '단가': '7,580', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M6710639', '청구코드': 'M6710639', '처방코드': 'M6710639', '코드명': 'Multifix EF(폴리용)(유치카테터 고정용)(비즈메디)', '단가': '1,500', '급비': 'B', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N0031004', '청구코드': 'N0031004', '처방코드': 'N0031004', '코드명': '내시경하 추간판제거술시 사용하는 치료재료 비용', '단가': '160,000', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N0101512', '청구코드': 'N0101512', '처방코드': 'N0101512', '코드명': '수술팩(Ⅱ)(마취시간 1시간초과~3시간이하)', '단가': '45,390', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N1494', '청구코드': 'N1494', '처방코드': 'N1494', '코드명': 'Diskectomy-by endoscopy(추간판제거술-내시경하)', '단가': '523,080', '급비': '0', 'case_n': 2, '동반(모든케이스)': True}, {'항목': '801', '코드': 'SZ631', '청구코드': 'SZ631', '처방코드': 'SZ6313', '코드명': 'EED (내시경적 경막외강 신경감압술)', '단가': '3,000,000', '급비': '3', 'case_n': 2, '동반(모든케이스)': True}]}, 'N1499': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_N1499_20251217_162305.xlsx', 'max_case_n': 16, 'rows': [{'항목': '401', '코드': '644902691', '청구코드': '644902691', '처방코드': '64490269', '코드명': '[331]중외생리식염주사액(20ml)', '단가': '321', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802273', '청구코드': '657802273', '처방코드': '65780227', '코드명': '[821][마]하나구연산펜타닐주0.157mg/2ml', '단가': '2,071', '급비': '1', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '640001071', '청구코드': '640001071', '처방코드': '64000107', '코드명': '[331]이노엔0.9%생리식염주사액(100ml)', '단가': '1,304', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '641906121', '청구코드': '641906121', '처방코드': 'BNSR', '코드명': '[235]나제론주사액0.3mg(0.3mg/2ml)', '단가': '18,475', '급비': '1', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '641907861', '청구코드': '641907861', '처방코드': '64190786', '코드명': '브레스온주 2ml (보령제약)', '단가': '120,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '645100341', '청구코드': '645100341', '처방코드': 'A0341', '코드명': '[349](OR용)대한관류용멸균생리식염수_(9g/1000mL)', '단가': '0', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '645100643', '청구코드': '645100643', '처방코드': 'AQU1', '코드명': '[713]대한멸균증류수20ml(앰플,PP)-대한약품*', '단가': '211', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '649800971', '청구코드': '649800971', '처방코드': 'BMBN', '코드명': '[123]명문모비눌주0.2mg/1ml(글리코피롤레이트)', '단가': '700', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '649804381', '청구코드': '649804381', '처방코드': '64980438', '코드명': '[235]*오트론주(온단세트론염산염수화물)(수출명:명문온단세트론주사)_(5mg/2ml) 급여명문제약(주)', '단가': '4,626', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '650500421', '청구코드': '650500421', '처방코드': 'A00421', '코드명': '[245]*제일에피네프린주사액', '단가': '338', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '653100701', '청구코드': '653100701', '처방코드': '65310070F', '코드명': '[611](OR용-FREE)비씨반코마이신염산염주1g', '단가': '0', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '653101191', '청구코드': '653101191', '처방코드': '653101191', '코드명': '[222]아록솔주(암브록솔염산염)_(15mg/2mL)', '단가': '300', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '653402351', '청구코드': '653402351', '처방코드': 'A0235', '코드명': '[111][향]포폴주사12ml(프로포폴)', '단가': '1,812', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '655402961', '청구코드': '655402961', '처방코드': '65540296', '코드명': '[122]로큐메론주50mg/5ml(로쿠로니움브롬화물)', '단가': '3,174', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802283', '청구코드': '657802283', '처방코드': '65780228', '코드명': '[821][마]하나구연산펜타닐주사(10ml/앰플(P)', '단가': '9,954', '급비': '1', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': '657804451', '청구코드': '657804451', '처방코드': '65780445', '코드명': '[121]로카핀주7.5mg/ml(로피바카인염산염수화물)_(0.158g/20ml)', '단가': '5,338', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': 'IX', '청구코드': 'IX', '처방코드': 'IX', '코드명': '수기료 산정안함', '단가': '0', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK053', '청구코드': 'KK053', '처방코드': 'KK053', '코드명': 'Fluid-501-1000mL', '단가': '3,920', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'B0003006', '청구코드': 'B0003006', '처방코드': 'B0003006', '코드명': 'Nylon 3/0 (비즈메디)', '단가': '1,460', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BK7000ZC', '청구코드': 'BK7000ZC', '처방코드': 'BK7000ZC', '코드명': 'MEDIAS T (아이비메디칼)', '단가': '12,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM2000JI', '청구코드': 'BM2000JI', '처방코드': 'BM2000JI', '코드명': 'Tape silicone(innomed) 2.5*30cm (비즈메디)', '단가': '4,950', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCM', '코드명': '인성부직반창고 마스크', '단가': '30,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100JN', '청구코드': 'BM5100JN', '처방코드': 'BM5101JN', '코드명': 'VS 밴드 (아이비메디칼)', '단가': '30,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100RW', '청구코드': 'BM5100RW', '처방코드': 'BM5100RW', '코드명': '메디큐어롤반창고4 인치(10*10) (비즈메디)', '단가': '1,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'J4306735', '청구코드': 'J4306735', '처방코드': 'J4306735', '코드명': 'Autofuser K Bolus (PCA )(아이비메디칼)', '단가': '54,150', '급비': 'B', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K3002304', '청구코드': 'K3002304', '처방코드': 'K3002304', '코드명': 'Barovac-Pp (세운)', '단가': '17,160', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4041031', '청구코드': 'K4041031', '처방코드': 'K4041031', '코드명': 'E-Tube Reinforced Cuffed Type(꺽임방지형)(전규격)(비즈메디)', '단가': '14,820', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4430035', '청구코드': 'K4430035', '처방코드': 'K4430035', '코드명': 'ACE BLADE(비전메디)', '단가': '15,750', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K4501361', '청구코드': 'K4501361', '처방코드': 'K4501361', '코드명': 'HEATED CIRCUIT', '단가': '57,070', '급비': 'B', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K9205050', '청구코드': 'K9205050', '처방코드': 'K9205050', '코드명': 'WOUNDCLOT ABC', '단가': '300,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'K9205250', '청구코드': 'K9205250', '처방코드': 'K9205250', '코드명': 'M-Clot [전규격]', '단가': '100,000', '급비': '3', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M6610161', '청구코드': 'M6610161', '처방코드': 'M6610161', '코드명': 'ACE GRIP ENDO FIXⅡ', '단가': '7,580', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M6710639', '청구코드': 'M6710639', '처방코드': 'M6710639', '코드명': 'Multifix EF(폴리용)(유치카테터 고정용)(비즈메디)', '단가': '1,500', '급비': 'B', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N0051006', '청구코드': 'N0051006', '처방코드': 'N0051006', '코드명': '척추 및 척수수술에 사용한 Burr,Saw 등 절삭기류', '단가': '116,250', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}, {'항목': '801', '코드': 'N1499', '청구코드': 'N1499', '처방코드': 'N1499', '코드명': 'Laminectomy-lumbar(척추후궁절제술-요추)', '단가': '615,160', '급비': '0', 'case_n': 16, '동반(모든케이스)': True}]}, 'SZ631': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_SZ631_20251217_162151.xlsx', 'max_case_n': 14, 'rows': [{'항목': '401', '코드': '657804451', '청구코드': '657804451', '처방코드': '65780445', '코드명': '[121]로카핀주7.5mg/ml(로피바카인염산염수화물)_(0.158g/20ml)', '단가': '5,338', '급비': '0', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': '(PINJ05)', '청구코드': '(PINJ05)', '처방코드': 'PINJ05', '코드명': '통증주사', '단가': '50,000', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': '670602631', '청구코드': '670602631', '처방코드': '67060263', '코드명': '하이코민주사 2ml(fee free-하부코드전용)', '단가': '0', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': '681100401', '청구코드': '681100401', '처방코드': '6932AAP', '코드명': '(fee free-하부코드전용)GCW아세트아미노펜주', '단가': '0', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': 'IX', '청구코드': 'IX', '처방코드': 'IX', '코드명': '수기료 산정안함', '단가': '0', '급비': '0', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK053', '청구코드': 'KK053', '처방코드': 'KK053', '코드명': 'Fluid-501-1000mL', '단가': '3,920', '급비': '0', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '401', '코드': 'KK054', '청구코드': 'KK054', '처방코드': 'KK054', '코드명': 'IV side', '단가': '1,440', '급비': '0', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCN', '코드명': '인성부직반창고 나잘', '단가': '30,000', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BJ4802UN', '청구코드': 'BJ4802UN', '처방코드': 'BJ4802UNF', '코드명': '(EED)Spinaut-V Epidural Catheter-무수가', '단가': '0', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BK7000VB', '청구코드': 'BK7000VB', '처방코드': 'BK7000VB', '코드명': 'BBAND (아이비메디칼)', '단가': '30,000', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}, {'항목': '801', '코드': 'SZ631', '청구코드': 'SZ631', '처방코드': 'SZ6313', '코드명': 'EED (내시경적 경막외강 신경감압술)', '단가': '3,000,000', '급비': '3', 'case_n': 14, '동반(모든케이스)': True}]}, 'SZ634': {'base_col': '청구코드', 'file_name': '규칙결과_청구코드_SZ634_20251217_155111.xlsx', 'max_case_n': 19, 'rows': [{'항목': '401', '코드': '644902691', '청구코드': '644902691', '처방코드': '64490269', '코드명': '[331]중외생리식염주사액(20ml)', '단가': '321', '급비': '0', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '401', '코드': '(6706034A)', '청구코드': '(6706034A)', '처방코드': '6706034A', '코드명': '[121]휴온스리도카인1 %20ml(PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '401', '코드': '657802271', '청구코드': '657802271', '처방코드': '65780229', '코드명': '[마]*하나구연산펜타닐 0.157mg/2ml (PEN-무수가)', '단가': '0', '급비': '3', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '801', '코드': '699900020', '청구코드': '699900020', '처방코드': 'OXY02', '코드명': '처치용산소 2L', '단가': '11', '급비': '0', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '801', '코드': 'BM5100DC', '청구코드': 'BM5100DC', '처방코드': 'BM5100DCN', '코드명': '인성부직반창고 나잘', '단가': '30,000', '급비': '3', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M0040', '청구코드': 'M0040', '처방코드': 'M0040', '코드명': 'O2 Inhalation(산소흡입)-1일당', '단가': '8,720', '급비': '0', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '801', '코드': 'M3101127', '청구코드': 'M3101127', '처방코드': 'M3101027', '코드명': '큐앤큐메딕스밴드 부직포+탈지면패드 6*8 [1호]', '단가': '143', '급비': 'B', 'case_n': 19, '동반(모든케이스)': True}, {'항목': '801', '코드': 'SZ634', '청구코드': 'SZ634', '처방코드': 'SZ634A', '코드명': 'PEN -Lumbar(경피적 경막외강 신경성형술)', '단가': '1,100,000', '급비': '3', 'case_n': 19, '동반(모든케이스)': True}]}}
+RULES: Dict[str, dict] = {
+    # (사용자 제공 RULES 그대로 두시면 됩니다)
+    # ... 생략하지 말고 현재 갖고 있는 RULES 전체를 여기 붙여넣으세요 ...
+}
 
 # -----------------------------
 # 공통: 복붙 파서
@@ -22,10 +24,12 @@ EXPECTED_COLS = [
     "선택", "처방코드", "청구코드", "처방명", "항목", "종별가산", "단가", "종별가산단가",
     "1회투", "Tms/Tot Q", "일수", "금액", "급비", "급비지정", "포괄", "완화", "원외", "무료", "처방일자", "항목명"
 ]
+
 SECTION_ROW_PATTERN = re.compile(r"^\s*\[\s*.+?\s*\]\s*$")  # [ 진찰료 ] 같은 행
 
+
 def _clean_lines(raw: str) -> str:
-    lines = []
+    lines: List[str] = []
     for ln in raw.replace("\r\n", "\n").replace("\r", "\n").splitlines():
         if not ln.strip():
             continue
@@ -33,6 +37,7 @@ def _clean_lines(raw: str) -> str:
             continue
         lines.append(ln.lstrip("\t"))
     return "\n".join(lines)
+
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = [str(c).replace("\ufeff", "").strip() for c in df.columns]
@@ -48,18 +53,33 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     }
     return df.rename(columns=rename_map)
 
+
 def parse_clipboard_tsv(raw: str) -> pd.DataFrame:
     cleaned = _clean_lines(raw)
     if not cleaned.strip():
         return pd.DataFrame(columns=EXPECTED_COLS)
 
-    df = pd.read_csv(io.StringIO(cleaned), sep="\t", dtype=str, engine="python", keep_default_na=False)
+    df = pd.read_csv(
+        io.StringIO(cleaned),
+        sep="\t",
+        dtype=str,
+        engine="python",
+        keep_default_na=False,
+    )
     df = _normalize_columns(df)
 
+    # 헤더 없을 때 재시도
     if ("처방코드" not in df.columns) and ("청구코드" not in df.columns):
-        df2 = pd.read_csv(io.StringIO(cleaned), sep="\t", header=None, dtype=str, engine="python", keep_default_na=False)
-        df2 = df2.iloc[:, :len(EXPECTED_COLS)]
-        df2.columns = EXPECTED_COLS[:df2.shape[1]]
+        df2 = pd.read_csv(
+            io.StringIO(cleaned),
+            sep="\t",
+            header=None,
+            dtype=str,
+            engine="python",
+            keep_default_na=False,
+        )
+        df2 = df2.iloc[:, : len(EXPECTED_COLS)]
+        df2.columns = EXPECTED_COLS[: df2.shape[1]]
         df = df2
     else:
         for c in EXPECTED_COLS:
@@ -67,11 +87,9 @@ def parse_clipboard_tsv(raw: str) -> pd.DataFrame:
                 df[c] = ""
         df = df[EXPECTED_COLS].copy()
 
-    # 날짜/트림
-    df["처방일자"] = df["처방일자"].astype(str).str.replace("\ufeff", "", regex=False).str.strip()
-    for c in ["항목", "처방코드", "청구코드", "처방명"]:
-        if c in df.columns:
-            df[c] = df[c].astype(str).str.replace("\ufeff", "", regex=False).str.strip()
+    # 날짜
+    df["처방일자"] = df["처방일자"].astype(str).str.strip()
+    df["처방일자_dt"] = pd.to_datetime(df["처방일자"], format="%Y%m%d", errors="coerce")
 
     # 섹션행 제거
     mask_section = df["처방코드"].astype(str).str.strip().str.match(r"^\[.+\]$")
@@ -81,168 +99,137 @@ def parse_clipboard_tsv(raw: str) -> pd.DataFrame:
     mask_no_codes = (df["처방코드"].astype(str).str.strip() == "") & (df["청구코드"].astype(str).str.strip() == "")
     df = df.loc[~mask_no_codes].copy()
 
+    # 기본 trim
+    for c in ["항목", "처방코드", "청구코드", "처방명", "급비", "처방일자"]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.replace("\ufeff", "", regex=False).str.strip()
+
     return df
 
+
 # -----------------------------
-# RULES -> expected map
+# 점검 로직
 # -----------------------------
-def build_expected_sets() -> Dict[str, dict]:
-    exp: Dict[str, dict] = {}
-    for base_code, info in RULES.items():
-        rows = info.get("rows", []) or []
-        exp_0401 = [r for r in rows if str(r.get("항목","")).strip() == "0401"]
-        exp_0801 = [r for r in rows if str(r.get("항목","")).strip() == "0801"]
-        exp[base_code] = {
-            "base_col": info.get("base_col", "청구코드"),
-            "file_name": info.get("file_name", ""),
-            "max_case_n": int(info.get("max_case_n", 0) or 0),
-            "rows_0401": exp_0401,
-            "rows_0801": exp_0801,
-        }
-    return exp
+def applied_base_codes_by_date(df_case: pd.DataFrame) -> Dict[str, Set[str]]:
+    """
+    날짜별 적용 기준코드 목록
+    - 기준코드 판정: 항목=0801 행에서 RULES[base_code]['base_col'] 값에 base_code가 등장하면 적용
+    """
+    out: Dict[str, Set[str]] = {}
+    if df_case is None or df_case.empty:
+        return out
 
-EXPECTED = build_expected_sets()
-
-def detect_applied_base_codes(df: pd.DataFrame) -> Dict[str, List[str]]:
-    """처방일자별로 RULES 기준코드가 실제로 '존재'한 목록 반환."""
-    applied_by_date: Dict[str, List[str]] = {}
-    if df is None or df.empty:
-        return applied_by_date
-
-    for col in ["처방일자", "항목", "청구코드", "처방코드"]:
-        if col not in df.columns:
-            df[col] = ""
-    d = df.copy()
+    d = df_case.copy()
+    if "처방일자" not in d.columns:
+        d["처방일자"] = ""
+    if "항목" not in d.columns:
+        d["항목"] = ""
     d["처방일자"] = d["처방일자"].astype(str).str.strip()
     d["항목"] = d["항목"].astype(str).str.strip()
 
     for rx_date, g in d.groupby("처방일자", dropna=False):
-        hit_codes = []
-        for base_code, rule in EXPECTED.items():
+        codes_for_date: Set[str] = set()
+        for base_code, rule in RULES.items():
             base_col = rule.get("base_col", "청구코드")
             if base_col not in g.columns:
                 continue
             base_vals = set(g.loc[g["항목"] == "0801", base_col].astype(str).str.strip().tolist())
             base_vals.discard("")
             if base_code in base_vals:
-                hit_codes.append(base_code)
-        if hit_codes:
-            applied_by_date[str(rx_date)] = sorted(set(hit_codes))
-    return applied_by_date
+                codes_for_date.add(base_code)
+        if codes_for_date:
+            out[str(rx_date)] = codes_for_date
 
-def check_missing_and_checks(df: pd.DataFrame, observe_col: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """return (checklist_df, missing_df)"""
-    base_cols = ["처방일자","기준코드","항목","코드","체크","case_n","코드명","청구코드","처방코드","단가","급비","규칙파일"]
-    if df is None or df.empty:
-        return pd.DataFrame(columns=base_cols), pd.DataFrame(columns=base_cols)
+    return out
 
-    d = df.copy()
-    for c in ["처방일자","항목",observe_col,"청구코드","처방코드"]:
-        if c not in d.columns:
-            d[c] = ""
-        d[c] = d[c].astype(str).str.strip()
 
-    applied_by_date = detect_applied_base_codes(d)
+def build_check_table(
+    df_case: pd.DataFrame,
+    rx_date: str,
+    base_code: str,
+    item: str,
+    check_col: str,
+    show_only_missing: bool,
+) -> pd.DataFrame:
+    """
+    item: "0401" or "0801"
+    check_col: "청구코드" or "처방코드" (처방 내 존재 여부 판단)
+    """
+    rule = RULES.get(base_code, {})
+    rules_list = rule.get("rules_0401", []) if item == "0401" else rule.get("rules_0801", [])
+    if not rules_list:
+        return pd.DataFrame(columns=["✓", "코드", "청구코드", "처방코드", "코드명", "단가", "급비", "case_n"])
 
-    out_rows: List[dict] = []
+    g = df_case.copy()
+    g["처방일자"] = g.get("처방일자", "").astype(str).str.strip()
+    g["항목"] = g.get("항목", "").astype(str).str.strip()
+    g[check_col] = g.get(check_col, "").astype(str).str.strip()
 
-    for rx_date, g in d.groupby("처방일자", dropna=False):
-        rx_date = str(rx_date)
-        base_codes = applied_by_date.get(rx_date, [])
-        if not base_codes:
-            continue
+    dg = g[g["처방일자"] == str(rx_date)].copy()
 
-        obs_0401 = set(g.loc[g["항목"]=="0401", observe_col].astype(str).str.strip().tolist()); obs_0401.discard("")
-        obs_0801 = set(g.loc[g["항목"]=="0801", observe_col].astype(str).str.strip().tolist()); obs_0801.discard("")
+    obs = set(dg.loc[dg["항목"] == item, check_col].astype(str).str.strip().tolist())
+    obs.discard("")
 
-        for base_code in base_codes:
-            rule = EXPECTED.get(base_code, {})
-            rule_file = rule.get("file_name","")
+    rows: List[dict] = []
+    for r in rules_list:
+        code = str(r.get("코드", "")).strip()
+        is_present = (code in obs) if code else False
+        rows.append(
+            {
+                "✓": is_present,
+                "코드": code,
+                "청구코드": str(r.get("청구코드", "")).strip(),
+                "처방코드": str(r.get("처방코드", "")).strip(),
+                "코드명": str(r.get("코드명", "")).strip(),
+                "단가": str(r.get("단가", "")).strip(),
+                "급비": str(r.get("급비", "")).strip(),
+                "case_n": int(r.get("case_n", 0) or 0),
+            }
+        )
 
-            for r in rule.get("rows_0401", []):
-                code = str(r.get("코드","")).strip()
-                if not code:
-                    continue
-                ok = (code in obs_0401)
-                out_rows.append({
-                    "처방일자": rx_date,
-                    "기준코드": base_code,
-                    "항목": "0401",
-                    "코드": code,
-                    "체크": "✅" if ok else "❌",
-                    "case_n": int(r.get("case_n",0) or 0),
-                    "코드명": str(r.get("코드명","")).strip(),
-                    "청구코드": str(r.get("청구코드","")).strip(),
-                    "처방코드": str(r.get("처방코드","")).strip(),
-                    "단가": str(r.get("단가","")).strip(),
-                    "급비": str(r.get("급비","")).strip(),
-                    "규칙파일": rule_file,
-                })
+    out = pd.DataFrame(rows)
+    if show_only_missing:
+        out = out[out["✓"] == False].copy()
 
-            for r in rule.get("rows_0801", []):
-                code = str(r.get("코드","")).strip()
-                if not code:
-                    continue
-                ok = (code in obs_0801)
-                out_rows.append({
-                    "처방일자": rx_date,
-                    "기준코드": base_code,
-                    "항목": "0801",
-                    "코드": code,
-                    "체크": "✅" if ok else "❌",
-                    "case_n": int(r.get("case_n",0) or 0),
-                    "코드명": str(r.get("코드명","")).strip(),
-                    "청구코드": str(r.get("청구코드","")).strip(),
-                    "처방코드": str(r.get("처방코드","")).strip(),
-                    "단가": str(r.get("단가","")).strip(),
-                    "급비": str(r.get("급비","")).strip(),
-                    "규칙파일": rule_file,
-                })
+    out = out.sort_values(["✓", "case_n", "코드"], ascending=[True, False, True]).reset_index(drop=True)
+    return out
 
-    checklist = pd.DataFrame(out_rows)
-    if checklist.empty:
-        checklist = pd.DataFrame(columns=base_cols)
 
-    missing = checklist[checklist["체크"]=="❌"].copy() if not checklist.empty else checklist.copy()
-    return checklist, missing
+def summarize_result(check_0401: pd.DataFrame, check_0801: pd.DataFrame) -> dict:
+    def _cnt(df: pd.DataFrame):
+        if df is None or df.empty:
+            return (0, 0)
+        total = int(len(df))
+        ok = int(df["✓"].sum()) if "✓" in df.columns else 0
+        miss = total - ok
+        return total, miss
 
-def summarize_result(checklist: pd.DataFrame, missing: pd.DataFrame) -> str:
-    if checklist is None or checklist.empty:
-        return "규칙을 적용할 기준코드(0801)가 이번 복붙에서 발견되지 않았습니다. (기준코드가 포함된 처방일자 기준으로만 점검합니다.)"
+    t40, m40 = _cnt(check_0401)
+    t80, m80 = _cnt(check_0801)
+    return {
+        "0401_total": t40,
+        "0401_missing": m40,
+        "0801_total": t80,
+        "0801_missing": m80,
+        "total_missing": m40 + m80,
+    }
 
-    total_items = len(checklist)
-    ok_n = int((checklist["체크"]=="✅").sum())
-    miss_n = int((checklist["체크"]=="❌").sum())
-    base_cnt = checklist[["처방일자","기준코드"]].drop_duplicates().shape[0]
-
-    if miss_n == 0:
-        return f"✅ 점검 완료: 적용 그룹 {base_cnt}건 / 체크 {total_items}건 / 누락 0건"
-
-    top = (missing.groupby(["항목","코드"])
-                .size()
-                .reset_index(name="누락횟수")
-                .sort_values(["누락횟수","항목","코드"], ascending=[False,True,True])
-                .head(5))
-    tops = ", ".join([f"{r['항목']}-{r['코드']}({int(r['누락횟수'])})" for _,r in top.iterrows()]) if not top.empty else ""
-    extra = f" / 대표 누락: {tops}" if tops else ""
-    return f"⚠️ 점검 완료: 적용 그룹 {base_cnt}건 / 체크 {total_items}건 / 누락 {miss_n}건{extra}"
 
 # -----------------------------
 # UI
 # -----------------------------
 st.set_page_config(page_title="규칙 누락 점검(하드코딩)", layout="wide")
-st.title("규칙(하드코딩) 기반 점검: 처방 복붙 → 체크표시/누락 요약")
+st.title("규칙결과 하드코딩 → 처방 복붙만으로 0401/0801 점검 (각 파일 case_n 최대값 규칙만)")
 
 with st.sidebar:
-    st.subheader("설정")
-    observe_col = st.radio("처방에서 코드 존재 판단 기준", ["청구코드","처방코드"], index=0)
-    st.caption("※ 기준코드 존재 판정은 규칙파일의 base_col + 항목=0801 에서만 합니다.")
+    st.subheader("점검 옵션")
+    check_col = st.radio("처방에서 ‘있다/없다’ 판단 컬럼", ["청구코드", "처방코드"], index=0)
+    show_only_missing = st.toggle("누락만 보기", value=False)
     st.divider()
-    st.subheader("하드코딩된 규칙")
-    st.caption(f"총 기준코드: {len(EXPECTED):,}개")
+    st.caption("※ 기준코드는 '항목=0801'에서 base_col에 등장해야 적용됩니다.")
+    st.caption("※ RULES는 '각 파일의 case_n 최대값'과 동일한 행만 포함합니다.")
 
 st.subheader("처방 복붙")
-
 if "rx_raw" not in st.session_state:
     st.session_state["rx_raw"] = ""
 
@@ -255,77 +242,149 @@ with cbtn:
 raw = st.text_area("표 그대로 붙여넣기(탭 구분)", height=220, key="rx_raw")
 
 if not raw.strip():
-    st.info("처방을 복붙하면 자동으로 점검합니다.")
+    st.info("처방을 복붙하면 자동으로 기준코드를 판정하고 체크리스트를 보여줍니다.")
     st.stop()
 
 df_case = parse_clipboard_tsv(raw)
-checklist, missing = check_missing_and_checks(df_case, observe_col=observe_col)
 
-applied_pairs = checklist[["처방일자","기준코드"]].drop_duplicates() if not checklist.empty else pd.DataFrame(columns=["처방일자","기준코드"])
-applied_codes = sorted(set(applied_pairs["기준코드"].tolist())) if not applied_pairs.empty else []
+# 날짜별 적용 기준코드 판정
+applied_by_date = applied_base_codes_by_date(df_case)
+applied_codes_all = sorted({c for s in applied_by_date.values() for c in s})
 
-with st.expander("이번 복붙에서 적용된 기준코드(0801에서 발견된 것만)", expanded=True):
+# ✅ 기준코드 목록(이번 복붙 적용 여부 색표시)
+with st.expander("기준코드 목록 (이번 복붙에서 적용된 기준코드 색표시)", expanded=True):
     rows = []
-    for base_code, rule in EXPECTED.items():
-        rows.append({
-            "기준코드": base_code,
-            "규칙파일": rule.get("file_name",""),
-            "max_case_n": rule.get("max_case_n",0),
-            "0401개수": len(rule.get("rows_0401",[])),
-            "0801개수": len(rule.get("rows_0801",[])),
-            "이번복붙_적용여부": base_code in applied_codes,
-        })
-    df_show = pd.DataFrame(rows).sort_values(["이번복붙_적용여부","기준코드"], ascending=[False, True])
+    for base_code, rule in sorted(RULES.items(), key=lambda x: x[0]):
+        rows.append(
+            {
+                "기준코드": base_code,
+                "base_col": rule.get("base_col", ""),
+                "case_n_max": rule.get("case_n_max", ""),
+                "0401규칙수": len(rule.get("rules_0401", [])),
+                "0801규칙수": len(rule.get("rules_0801", [])),
+                "이번복붙_적용여부": (base_code in applied_codes_all),
+            }
+        )
+    df_list = (
+        pd.DataFrame(rows)
+        .sort_values(["이번복붙_적용여부", "기준코드"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
 
     def _hl(row):
         return ["background-color:#d1fae5"] * len(row) if bool(row.get("이번복붙_적용여부")) else [""] * len(row)
 
-    st.dataframe(df_show.style.apply(_hl, axis=1), use_container_width=True, height=260)
-    st.caption("적용된 기준코드: " + (", ".join(applied_codes) if applied_codes else "(없음)"))
+    st.dataframe(df_list.style.apply(_hl, axis=1), use_container_width=True)
+    st.caption("이번 복붙에서 적용된 기준코드: " + (", ".join(applied_codes_all) if applied_codes_all else "(없음)"))
+
+if not applied_by_date:
+    st.warning("이번 복붙에서는 어떤 기준코드도(항목=0801 기준) 발견되지 않아 규칙을 적용하지 않았습니다.")
+    st.stop()
 
 st.divider()
-st.subheader("결론")
-st.info(summarize_result(checklist, missing))
+st.subheader("점검 결과 (날짜 × 기준코드)")
 
-VIEW_COLS = ["코드","체크","case_n","코드명","청구코드","처방코드","단가","급비"]
+# 날짜별 섹션
+for rx_date in sorted(applied_by_date.keys()):
+    codes = sorted(applied_by_date[rx_date])
+    st.markdown(f"### 처방일자: {rx_date}  |  적용 기준코드: {', '.join(codes)}")
 
-def render_side(df: pd.DataFrame, title: str):
-    st.markdown(f"### {title}")
-    if df is None or df.empty:
-        st.info("표시할 내용 없음")
-        return
+    for base_code in codes:
+        colL, colR = st.columns(2)
 
-    for (rx_date, base_code), g in df.groupby(["처방일자","기준코드"], dropna=False):
-        miss_n = int((g["체크"]=="❌").sum())
-        ok_n = int((g["체크"]=="✅").sum())
-        st.caption(f"처방일자 {rx_date} / 기준코드 {base_code}  —  ✅{ok_n}  ❌{miss_n}")
+        # 표시용(누락만 보기 옵션 적용)
+        view_0401 = build_check_table(df_case, rx_date, base_code, "0401", check_col, show_only_missing)
+        view_0801 = build_check_table(df_case, rx_date, base_code, "0801", check_col, show_only_missing)
 
-        show = g[VIEW_COLS].copy().reset_index(drop=True)
+        # 요약용(항상 전체 기준)
+        full_0401 = build_check_table(df_case, rx_date, base_code, "0401", check_col, False)
+        full_0801 = build_check_table(df_case, rx_date, base_code, "0801", check_col, False)
+        summary = summarize_result(full_0401, full_0801)
 
-        def _style_row(r):
-            if r["체크"] == "❌":
-                return ["background-color:#fee2e2"] * len(r)
-            return ["background-color:#d1fae5"] * len(r)
+        # ✅ 결론(요약)
+        if summary["total_missing"] == 0:
+            st.success(f"✅ 기준코드 {base_code}: 누락 없음 (0401 {summary['0401_total']}개 / 0801 {summary['0801_total']}개)")
+        else:
+            st.error(
+                f"⚠️ 기준코드 {base_code}: 누락 {summary['total_missing']}개 "
+                f"(0401 누락 {summary['0401_missing']}/{summary['0401_total']}, "
+                f"0801 누락 {summary['0801_missing']}/{summary['0801_total']})"
+            )
 
-        st.dataframe(show.style.apply(_style_row, axis=1), use_container_width=True)
+        with colL:
+            st.markdown(f"**0401 체크리스트 — 기준코드 {base_code}**")
+            st.dataframe(
+                view_0401,
+                use_container_width=True,
+                column_config={
+                    "✓": st.column_config.CheckboxColumn("✓", help="현재 처방(해당 날짜)에 존재하면 체크"),
+                    "case_n": st.column_config.NumberColumn("case_n"),
+                },
+            )
 
-left, right = st.columns(2)
-with left:
-    render_side(checklist[checklist["항목"]=="0401"].copy(), "0401 체크리스트")
-with right:
-    render_side(checklist[checklist["항목"]=="0801"].copy(), "0801 체크리스트")
+        with colR:
+            st.markdown(f"**0801 체크리스트 — 기준코드 {base_code}**")
+            st.dataframe(
+                view_0801,
+                use_container_width=True,
+                column_config={
+                    "✓": st.column_config.CheckboxColumn("✓", help="현재 처방(해당 날짜)에 존재하면 체크"),
+                    "case_n": st.column_config.NumberColumn("case_n"),
+                },
+            )
 
-st.divider()
+    st.divider()
+
+# -----------------------------
+# 다운로드 (openpyxl 없으면 CSV로 자동 대체)
+# -----------------------------
 st.subheader("다운로드")
-x = io.BytesIO()
-with pd.ExcelWriter(x, engine="xlsxwriter") as writer:
-    checklist.to_excel(writer, index=False, sheet_name="checklist")
-    missing.to_excel(writer, index=False, sheet_name="missing")
 
-st.download_button(
-    "📥 체크/누락 결과 다운로드(Excel)",
-    data=x.getvalue(),
-    file_name=f"rulecheck_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    use_container_width=True
-)
+out_rows = []
+for rx_date, codes in applied_by_date.items():
+    for base_code in codes:
+        for item in ["0401", "0801"]:
+            tbl = build_check_table(df_case, rx_date, base_code, item, check_col, False)
+            if tbl.empty:
+                continue
+            tbl2 = tbl.copy()
+            tbl2.insert(0, "항목", item)
+            tbl2.insert(0, "기준코드", base_code)
+            tbl2.insert(0, "처방일자", rx_date)
+            out_rows.append(tbl2)
+
+if not out_rows:
+    st.info("다운로드할 체크리스트가 없습니다.")
+    st.stop()
+
+out_df = pd.concat(out_rows, ignore_index=True)
+
+# 1) xlsx 시도
+can_xlsx = True
+try:
+    import openpyxl  # noqa: F401
+except Exception:
+    can_xlsx = False
+
+if can_xlsx:
+    x = io.BytesIO()
+    with pd.ExcelWriter(x, engine="openpyxl") as writer:
+        out_df.to_excel(writer, index=False, sheet_name="checklist")
+
+    st.download_button(
+        "📥 체크리스트 다운로드(Excel .xlsx)",
+        data=x.getvalue(),
+        file_name=f"체크리스트_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+else:
+    csv_bytes = out_df.to_csv(index=False).encode("utf-8-sig")
+    st.warning("⚠️ openpyxl이 설치되어 있지 않아 XLSX 대신 CSV로 다운로드합니다. (requirements에 openpyxl 추가하세요)")
+    st.download_button(
+        "📥 체크리스트 다운로드(CSV)",
+        data=csv_bytes,
+        file_name=f"체크리스트_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
